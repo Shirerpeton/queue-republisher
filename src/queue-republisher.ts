@@ -6,39 +6,66 @@ const program = new Command();
 program
     .name('queue-republisher')
     .description('simmple command line script to republish messages from one queue to another')
-    .version('0.0.1');
+    .version('0.1.0');
 
 program
     .option('-c, --connection-string <connection-string>', 'connection string to rabbitmq server', 'amqp://localhost:5672')
     .option('-s, --source-queue <source-queue>', 'source queue name', 'source-queue')
-    .option('-t, --target-queue <target-queue>', 'target queue name', 'target-queue');
+    .option('-t, --target-queue <target-queue>', 'target queue name', 'target-queue')
+    .option('-m, --message-count <message-count>', 'number of messages to republish (set 0 or leave blank to not set a limit)', '0')
+    .option('-d, --delay <delay>', 'delay in milliseconds between each message', '0');
 
 program.parse(process.argv);
 const options = program.opts();
 const connectionString: string = options.connectionString;
 const sourceQueueName: string = options.sourceQueue;
 const targetQueueName: string = options.targetQueue;
-(async () => {
-    const messageHandler = (content: string): void => {
-        targetChannel.sendToQueue(targetQueueName, Buffer.from(content));
-    } 
-    const consumer = (channel: Channel) => (msg: ConsumeMessage | null): void => {
-        if(msg) {
-            const messageContent: string = msg.content.toString();
-            console.log(messageContent);
-            messageHandler(messageContent);
-            channel.ack(msg);
-        } else {
-            throw new Error('Error');
+const messageCount: number = parseInt(options.messageCount);
+const delay: number = parseInt(options.delay);
+
+const closeChannel = async (channel: Channel): Promise<void> => {
+    if (channel) await channel.close();
+}
+
+const closeConnection = async (connection: Connection): Promise<void> => {
+    if (connection) await connection.close();
+}
+
+(async (): Promise<void> => {
+    const getMessageHandler = (channel: Channel, queueName: string): ((content: string) => void) => {
+        return content => channel.sendToQueue(queueName, Buffer.from(content));
+    };
+    const consumeMessage = async (handler: (content: string) => void, delay: number): Promise<boolean> => {
+        const message: false | client.GetMessage = await sourceChannel.get(sourceQueueName);
+        if(message == false) {
+            console.log('No messages in queue');
+            return false;
         }
+        const messageContent: string = message.content.toString();
+        console.log(messageContent);
+        handler(messageContent);
+        sourceChannel.ack(message);
+        return new Promise(resolve => setTimeout(() => resolve(true), delay));
     }
     const connection: Connection = await client.connect(connectionString);
-
+    
     const targetChannel: Channel = await connection.createChannel();
     await targetChannel.assertQueue(targetQueueName);
-
+    
     const sourceChannel: Channel = await connection.createChannel();
     await sourceChannel.assertQueue(sourceQueueName);
-    await sourceChannel.consume(sourceQueueName, consumer(sourceChannel));
+    
+    let counter = 0;
+    while(messageCount == 0 || counter < messageCount) {
+        const result: boolean = await consumeMessage(getMessageHandler(targetChannel, targetQueueName), delay);
+        if(result == false) {
+            break;
+        }
+        counter++;
+    }
+    await closeChannel(targetChannel);
+    await closeChannel(sourceChannel);
+    await closeConnection(connection);
+    return;
 })();
 
