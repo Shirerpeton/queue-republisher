@@ -4,9 +4,17 @@
   "description": "Simple script to republish messages from one rabbitmq queue to another",
   "main": "./dist/queue-republisher.js",
   "scripts": {
-    "run": "node ./dist/queue-republisher.js",
+    "start": "node ./dist/queue-republisher.js",
     "build": "tsc"
   },
   "author": "Shirerpeton",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "amqplib": "^0.10.0",
+    "commander": "^9.4.0"
+  },
+  "devDependencies": {
+    "@types/amqplib": "^0.8.2",
+    "@types/commander": "^2.12.2"
+  }
 }
