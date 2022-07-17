@@ -1,6 +1,6 @@
 {
   "name": "queue-republisher",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Simple script to republish messages from one rabbitmq queue to another",
   "main": "./dist/queue-republisher.js",
   "scripts": {
